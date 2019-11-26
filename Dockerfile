@@ -1,7 +1,23 @@
-FROM ubuntu AS web100
+# ---- Base ----
+FROM ubuntu:latest AS base
+RUN apt-get update -yq
 LABEL maintainer="Michal Koziara mkoziara12@gmail.com"
-RUN apt-get update
-RUN apt-get install -y apache2
-RUN sed -i '/Listen 80/c\Listen 8080' /etc/apache2/ports.conf && service apache2 restart
-CMD apachectl -D FOREGROUND
-EXPOSE 8080
+
+# ---- Base dependencies ----
+FROM base AS dependency
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get install -yq curl php-cli php-pgsql git unzip php-mbstring php-xml php-apcu php-curl php-zip
+
+# ---- App ----
+FROM dependency AS app
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && \
+git clone https://github.com/michalkoziara/Symfony-blog
+WORKDIR /Symfony-blog
+RUN composer install && \
+composer require server --dev
+
+# ---- Release ----
+FROM dependency AS realese
+COPY --from=app /Symfony-blog /Symfony-blog
+WORKDIR /Symfony-blog/bin
+CMD php console server:run 0.0.0.0:8005 --env=dev
